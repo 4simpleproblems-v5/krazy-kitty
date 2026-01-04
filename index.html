@@ -3,285 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>90s Retro Cat Racer - 3D Texture Mode</title>
+    <title>3D Cat Racer</title>
     <style>
-        /* ========================================
-         CSS STYLES - THE 3D ENGINE
-         ========================================
-        */
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        canvas { display: block; }
 
-        :root {
-            /* Perspective: How extreme the 3D vanishing point is. 
-               Lower = wider lens, faster sense of speed. */
-            --perspective-depth: 400px; 
-            /* Horizon level: Where the sky meets the ground (percentage from top) */
-            --horizon-level: 45%;
-        }
-
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #000;
-             /* A retro font for UI */
-            font-family: 'Courier New', Courier, monospace;
-        }
-
-        /* The main camera container */
-        #game-viewport {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            /* Establish the 3D space */
-            perspective: var(--perspective-depth);
-            /* Set the vanishing point at the horizon */
-            perspective-origin: 50% var(--horizon-level);
-            background-color: #333;
-        }
-
-        /* --- THE SKYBOX (Parallax Panorama) ---
-        */
-        .sky-panorama {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            /* Sky takes up space above horizon */
-            height: var(--horizon-level);
-            z-index: 1;
-            overflow: hidden;
-        }
-
-        .sky-texture {
-            width: 100%;
-            height: 100%;
-            /* --- LOCAL IMAGE REFERENCE: SKY --- */
-            background-image: url('sky.jpg');
-            /* Important: repeat-x allows it to scroll infinitely sideways */
-            background-repeat: repeat-x;
-            /* Cover height, auto width to maintain aspect ratio */
-            background-size: auto 100%; 
-            background-position: center center;
-        }
-
-
-        /* --- THE 3D TRACK PLANE ---
-        */
-
-        /* The container holds the 3D space for the ground */
-        .ground-container {
-            position: absolute;
-            top: var(--horizon-level);
-            left: 0;
-            width: 100%;
-            /* Ground takes space below horizon */
-            height: calc(100% - var(--horizon-level));
-            /* Crucial: tells children to exist in 3D space */
-            transform-style: preserve-3d;
-            z-index: 2;
-             /* Fade the track into the horizon distance */
-            mask-image: linear-gradient(to bottom, transparent 0%, black 25%);
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%);
-        }
-
-        /* The actual 3D plane with the texture */
-        .track-plane {
-            /* Make it huge so it stretches to the horizon and sides */
-            position: absolute;
-            width: 400%; 
-            left: -150%; /* Center the huge plane horizontally */
-            height: 10000px; /* Very long road */
-            
-            /* --- 3D TRANSFORMATION --- */
-            /* Pivot rotation from the top edge (the horizon line) */
-            transform-origin: 50% 0%; 
-            /* Rotate X axis to lay it flat on the "ground" */
-            transform: rotateX(84deg) translateZ(0px);
-            
-            /* --- LOCAL IMAGE REFERENCE: TRACK --- */
-            background-image: url('track.jpg');
-            
-            /* repeat-y makes the road infinite forward */
-            background-repeat: repeat;
-            /* Scale the texture so it looks like a road width */
-            background-size: 40% auto; 
-            background-position: center 0px;
-            
-            /* Crunchy retro look */
-            image-rendering: pixelated; 
-            /* Smooth out distant textures slightly */
-            will-change: transform, background-position;
-        }
-
-
-        /* --- THE COCKPIT OVERLAY (2D UI) ---
-        */
-
-        .cockpit-layer {
+        /* The 2D Kitty/Car Overlay */
+        #cockpit-container {
             position: absolute;
             bottom: 0;
-            left: 0;
+            left: 50%;
+            transform: translateX(-50%);
             width: 100%;
-            height: 100%;
+            max-width: 1000px;
             pointer-events: none;
             z-index: 10;
             display: flex;
             justify-content: center;
             align-items: flex-end;
-             /* Engine rumble */
-            animation: rumble 0.1s infinite linear alternate;
+            animation: rumble 0.1s infinite alternate;
         }
 
-        .cockpit-image {
+        #cockpit-img {
             width: 100%;
-            max-width: 1000px; /* Adjust based on your image resolution */
-            display: block;
-            /* Ensure sharp edges on the cutout */
-             image-rendering: -webkit-optimize-contrast;
-             transform-origin: center bottom;
-             transition: transform 0.1s ease-out;
+            height: auto;
+            image-rendering: pixelated;
+            transition: transform 0.1s ease-out;
         }
 
         @keyframes rumble {
-            0% { transform: translateY(1px); }
-            100% { transform: translateY(-1px); }
+            from { transform: translateY(0); }
+            to { transform: translateY(2px); }
         }
 
-        /* UI overlay */
-        .ui-overlay {
+        /* UI */
+        #ui {
             position: absolute;
             top: 20px;
             left: 20px;
-            color: white;
-            font-size: 20px;
+            color: #0f0;
+            font-size: 24px;
+            text-shadow: 2px 2px #000;
             z-index: 20;
-            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
-            font-weight: bold;
-            font-style: italic;
         }
-        .speed-bar {
-            display: inline-block;
-            width: 100px;
-            height: 15px;
-            background: #333;
-            border: 2px solid white;
-        }
-        .speed-fill {
-            height: 100%;
-            background: linear-gradient(to right, yellow, red);
-            width: 50%; /* Dynamic */
-        }
-
     </style>
 </head>
 <body>
 
-    <div id="game-viewport">
-        <div class="sky-panorama">
-            <div class="sky-texture" id="skyTex"></div>
-        </div>
+    <div id="ui">SPEED: <span id="speed-val">0</span> km/h</div>
 
-        <div class="ground-container">
-            <div class="track-plane" id="trackPlane"></div>
-        </div>
-
-        <div class="cockpit-layer">
-            <img src="cockpit.png" alt="Cat Cockpit" class="cockpit-image" id="cockpitImg">
-        </div>
-
-        <div class="ui-overlay">
-            SPEED: <div class="speed-bar"><div class="speed-fill" id="speedFill"></div></div>
-        </div>
+    <div id="cockpit-container">
+        <img src="/cat/cat-straight.png" id="cockpit-img" alt="Kitty Pilot">
     </div>
 
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
 
-    <script>
-        // --- Setup Elements ---
-        const trackPlane = document.getElementById('trackPlane');
-        const skyTex = document.getElementById('skyTex');
-        const cockpitImg = document.getElementById('cockpitImg');
-        const speedFill = document.getElementById('speedFill');
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- 1. Scene Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false }); // False for retro look
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. True 3D Sky (Sphere) ---
+        const skyTexture = new THREE.TextureLoader().load('sky.jpg');
+        skyTexture.mapping = THREE.EquirectangularReflectionMapping; // Helps with panoramas
+        const skyGeometry = new THREE.SphereGeometry(500, 60, 40);
+        const skyMaterial = new THREE.MeshBasicMaterial({
+            map: skyTexture,
+            side: THREE.BackSide // Render on the inside
+        });
+        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+        scene.add(sky);
+
+        // --- 3. True 3D Racetrack (Floor) ---
+        const trackTexture = new THREE.TextureLoader().load('track.jpg');
+        trackTexture.wrapS = THREE.RepeatWrapping;
+        trackTexture.wrapT = THREE.RepeatWrapping;
+        trackTexture.repeat.set(1, 20); // Scale the texture tiles
+
+        const trackGeometry = new THREE.PlaneGeometry(100, 1000);
+        const trackMaterial = new THREE.MeshBasicMaterial({ map: trackTexture });
+        const track = new THREE.Mesh(trackGeometry, trackMaterial);
         
-        // --- Game State Variables ---
+        track.rotation.x = -Math.PI / 2; // Lay it flat
+        track.position.y = -2; // Slightly below camera
+        scene.add(track);
+
+        // --- 4. Controls & Movement ---
         let speed = 0;
-        let maxSpeed = 60;
-        let acceleration = 0.5;
-        let deceleration = 0.3;
-        
-        let trackPositionY = 0; // Moving forward
-        let trackPositionX = 50; // Center percentage
-        
-        let skyPositionX = 0; // Sky horizontal scroll for turning illusion
-        
-        // --- Controls Setup ---
-        let turningInput = 0; // -1 left, 1 right
-        let gasInput = false;
+        let rotation = 0;
         const keys = {};
+        const cockpitImg = document.getElementById('cockpit-img');
+        const speedVal = document.getElementById('speed-val');
 
-        document.addEventListener('keydown', (e) => { keys[e.key] = true; });
-        document.addEventListener('keyup', (e) => { keys[e.key] = false; });
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
 
+        // Camera positioning
+        camera.position.set(0, 0, 5);
 
-        // --- Main Game Loop (60fps target) ---
-        function gameLoop() {
-            // 1. Handle Inputs
-            turningInput = 0;
-            if(keys['ArrowLeft']) turningInput = -1;
-            if(keys['ArrowRight']) turningInput = 1;
-            gasInput = keys['ArrowUp'];
+        // --- 5. Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
 
-            // 2. Calculate Speed Physics
-            if (gasInput) {
-                if (speed < maxSpeed) speed += acceleration;
-            } else {
-                if (speed > 0) speed -= deceleration;
+            // Acceleration Logic
+            if (keys['ArrowUp'] || keys['w']) speed = Math.min(speed + 0.01, 0.8);
+            else speed = Math.max(speed - 0.005, 0);
+
+            // Turning Logic
+            let turnEffect = 0;
+            if (keys['ArrowLeft'] || keys['a']) {
+                rotation += 0.02;
+                turnEffect = -1;
             }
-            // Clamp speed so it doesn't go negative or over max
-            speed = Math.max(0, Math.min(speed, maxSpeed));
-
-            // Update UI Speedometer
-            const speedPercent = (speed / maxSpeed) * 100;
-            speedFill.style.width = `${speedPercent}%`;
-
-
-            // 3. Update World Positions depending on speed
-            if (speed > 0) {
-                // Move Track Forward
-                trackPositionY += speed * 2;
-
-                // Move Track Sideways (turning)
-                // We multiply by speed so turning is sharper at high speed
-                trackPositionX += turningInput * (speed / 30);
-
-                // Move Sky Sideways (Parallax)
-                // Move the sky slower than the track turning to create depth
-                skyPositionX -= turningInput * (speed / 80);
+            if (keys['ArrowRight'] || keys['d']) {
+                rotation -= 0.02;
+                turnEffect = 1;
             }
 
-
-            // 4. Apply Visuals to CSS
+            // Move the world
+            // We scroll the texture instead of moving the camera to keep it "infinite"
+            trackTexture.offset.y += speed;
             
-            // Apply Track texture position
-            // positionX changes center %, positionY changes vertical pixels
-            trackPlane.style.backgroundPosition = `${trackPositionX}% ${trackPositionY}px`;
+            // Rotate the sky and floor together for the turn
+            track.rotation.z = rotation;
+            sky.rotation.y = rotation;
 
-            // Apply Sky texture position (scrolling horizontally)
-            skyTex.style.backgroundPosition = `${skyPositionX}px center`;
-            
-            // Tilt the cockpit image slightly when turning
-            const tiltAmount = turningInput * (speed / maxSpeed) * 4; // Max 4 degrees tilt
-            cockpitImg.style.transform = `rotate(${-tiltAmount}deg)`;
+            // Visual feedback on the 2D kitty
+            cockpitImg.style.transform = `rotate(${turnEffect * 5}deg) translateX(${turnEffect * 10}px)`;
+            speedVal.innerText = Math.floor(speed * 400);
 
-
-            // Loop
-            requestAnimationFrame(gameLoop);
+            renderer.render(scene, camera);
         }
 
-        // Start engine
-        gameLoop();
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
+        animate();
     </script>
 </body>
 </html>
