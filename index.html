@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Krazy Kitty Kart - 3D Navigator</title>
+    <title>F1 Kitty Grand Prix - Wide FOV</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
         canvas { display: block; }
 
-        /* Centered Cockpit Container */
         #cockpit-container {
             position: absolute;
             bottom: 0;
@@ -24,36 +23,44 @@
         }
 
         #cockpit-img {
-            /* Height determines how much of the screen the car takes */
-            height: 45vh; 
+            height: 50vh; 
             width: auto;
             image-rendering: pixelated;
-            /* Rumble effect moved here to keep it centered */
-            animation: rumble 0.1s infinite alternate;
+        }
+
+        .rumble-active {
+            animation: rumble 0.05s infinite alternate;
         }
 
         @keyframes rumble {
             from { transform: translateY(0); }
-            to { transform: translateY(4px); }
+            to { transform: translateY(2px); }
         }
 
         #ui {
             position: absolute;
             top: 20px;
             left: 20px;
-            color: #0f0;
-            font-size: 24px;
+            color: #ff0000;
+            font-size: 28px;
+            font-weight: bold;
             text-shadow: 2px 2px #000;
             z-index: 20;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-left: 5px solid #ff0000;
         }
     </style>
 </head>
 <body>
 
-    <div id="ui">SPEED: <span id="speed-val">0</span> km/h</div>
+    <div id="ui">
+        DRS: <span id="drs-status">READY</span><br>
+        SPEED: <span id="speed-val">0</span> MPH
+    </div>
 
     <div id="cockpit-container">
-        <img src="./cat/cat-straight.png" id="cockpit-img" alt="Kitty Pilot">
+        <img src="./cat/cat-straight.png" id="cockpit-img" class="rumble-active" alt="F1 Kitty">
     </div>
 
     <script type="importmap">
@@ -67,49 +74,52 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. Scene & Camera Setup ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        
+        // --- FOV ADJUSTMENT ---
+        // Increased from 75 to 90 for a wider perspective of the track.
+        const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 5000);
         
         const renderer = new THREE.WebGLRenderer({ antialias: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // --- 2. 3D Skybox ---
-        const skyTexture = new THREE.TextureLoader().load('sky.jpg');
-        const skyGeometry = new THREE.SphereGeometry(1000, 32, 32);
-        const skyMaterial = new THREE.MeshBasicMaterial({
-            map: skyTexture,
-            side: THREE.BackSide
-        });
-        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-        scene.add(sky);
+        const loader = new THREE.TextureLoader();
+        const skyTex = loader.load('sky.jpg');
+        const skyGroup = new THREE.Group();
+        
+        const topSkyGeo = new THREE.SphereGeometry(2000, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.375);
+        const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+        const topSky = new THREE.Mesh(topSkyGeo, skyMat);
+        skyGroup.add(topSky);
 
-        // --- 3. Finite Racetrack Plane ---
-        // Loads the image once across a single large 3D plane
-        const trackTexture = new THREE.TextureLoader().load('track.jpg');
-        
-        // Adjust these numbers based on the aspect ratio of your 'track.jpg'
-        const trackWidth = 500;
-        const trackHeight = 500;
-        
-        const trackGeometry = new THREE.PlaneGeometry(trackWidth, trackHeight);
-        const trackMaterial = new THREE.MeshBasicMaterial({ map: trackTexture });
-        const track = new THREE.Mesh(trackGeometry, trackMaterial);
-        
-        track.rotation.x = -Math.PI / 2; // Lay flat
-        track.position.y = -2; 
+        const bottomSkyGeo = new THREE.SphereGeometry(2000, 32, 32, 0, Math.PI * 2, Math.PI * 0.375, Math.PI);
+        const bottomSkyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+        const bottomSky = new THREE.Mesh(bottomSkyGeo, bottomSkyMat);
+        bottomSky.scale.y = -1;
+        skyGroup.add(bottomSky);
+
+        scene.add(skyGroup);
+
+        const trackTex = loader.load('track.jpg');
+        const trackGeo = new THREE.PlaneGeometry(2000, 2000); // Increased size to match wider FOV
+        const trackMat = new THREE.MeshBasicMaterial({ map: trackTex });
+        const track = new THREE.Mesh(trackGeo, trackMat);
+        track.rotation.x = -Math.PI / 2;
+        track.position.y = -2.5; 
         scene.add(track);
 
-        // --- 4. Driving Logic ---
-        let speed = 0;
-        let angle = 0; // The direction the car is facing
+        let velocity = 0;
+        let angle = 0;
+        const maxVelocity = 2.5;
+        const acceleration = 0.008; 
+        const dragCoefficient = 0.015;
+        const brakingPower = 0.03;
+
         const keys = {};
-        
         const cockpitImg = document.getElementById('cockpit-img');
         const speedVal = document.getElementById('speed-val');
 
-        // Sprite Paths
         const sprites = {
             left: './cat/cat-left.png',
             straight: './cat/cat-straight.png',
@@ -119,49 +129,43 @@
         window.addEventListener('keydown', (e) => keys[e.key] = true);
         window.addEventListener('keyup', (e) => keys[e.key] = false);
 
-        // Initial Camera Position (Starting line)
-        camera.position.set(0, 0, 100);
+        camera.position.set(0, 0, 800);
 
-        // --- 5. Animation Loop ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Acceleration / Friction
             if (keys['ArrowUp'] || keys['w']) {
-                speed = Math.min(speed + 0.005, 1.2);
-            } else {
-                speed = Math.max(speed - 0.005, 0);
+                velocity += acceleration;
+            } else if (keys['ArrowDown'] || keys['s']) {
+                velocity -= brakingPower;
             }
 
-            // Steering & Sprite Swapping
+            velocity -= (velocity * dragCoefficient);
+            velocity = Math.max(0, Math.min(velocity, maxVelocity));
+
             let currentSprite = sprites.straight;
-
-            if (keys['ArrowLeft'] || keys['a']) {
-                angle += 0.03;
-                currentSprite = sprites.left;
-            } else if (keys['ArrowRight'] || keys['d']) {
-                angle -= 0.03;
-                currentSprite = sprites.right;
+            if (velocity > 0.05) {
+                if (keys['ArrowLeft'] || keys['a']) {
+                    angle += 0.025;
+                    currentSprite = sprites.left;
+                } else if (keys['ArrowRight'] || keys['d']) {
+                    angle -= 0.025;
+                    currentSprite = sprites.right;
+                }
             }
 
-            // Update 2D Sprite
-            if (cockpitImg.src !== currentSprite) {
-                cockpitImg.src = currentSprite;
-            }
+            if (cockpitImg.src !== currentSprite) cockpitImg.src = currentSprite;
 
-            // Movement Physics (Trigonometry for 3D navigation)
-            // Camera moves based on the angle it's facing
-            camera.position.x -= Math.sin(angle) * speed;
-            camera.position.z -= Math.cos(angle) * speed;
-
-            // Camera looks where it is going
+            camera.position.x -= Math.sin(angle) * velocity * 5;
+            camera.position.z -= Math.cos(angle) * velocity * 5;
             camera.rotation.y = angle;
 
-            // Follow Camera with Skybox (prevents "leaving" the sky)
-            sky.position.copy(camera.position);
+            skyGroup.position.copy(camera.position);
 
-            // UI Speed Update
-            speedVal.innerText = Math.floor(speed * 200);
+            const mph = Math.floor(velocity * 92);
+            speedVal.innerText = mph;
+
+            cockpitImg.style.animationDuration = (mph > 0) ? `${0.2 - (mph/2000)}s` : '0s';
 
             renderer.render(scene, camera);
         }
