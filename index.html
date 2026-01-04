@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F1 Kitty Grand Prix - Wide FOV</title>
+    <title>F1 Kitty - Pro Tuner Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
         canvas { display: block; }
@@ -37,6 +37,7 @@
             to { transform: translateY(2px); }
         }
 
+        /* Dashboard UI */
         #ui {
             position: absolute;
             top: 20px;
@@ -46,17 +47,83 @@
             font-weight: bold;
             text-shadow: 2px 2px #000;
             z-index: 20;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
             border-left: 5px solid #ff0000;
+            pointer-events: none;
+        }
+
+        /* Tuning Panel */
+        #tuning-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 250px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 15px;
+            border: 1px solid #444;
+            z-index: 30;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+
+        .setting-row {
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .setting-row label {
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .setting-row input {
+            cursor: pointer;
+            accent-color: #ff0000;
+        }
+
+        span.val-display {
+            color: #0f0;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        DRS: <span id="drs-status">READY</span><br>
         SPEED: <span id="speed-val">0</span> MPH
+    </div>
+
+    <div id="tuning-panel">
+        <div style="text-align:center; font-weight:bold; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:5px;">ENGINEER TOOLS</div>
+        
+        <div class="setting-row">
+            <label>FOV: <span class="val-display" id="fov-label">90</span></label>
+            <input type="range" id="fov-slider" min="60" max="120" value="90">
+        </div>
+
+        <div class="setting-row">
+            <label>ACCEL: <span class="val-display" id="accel-label">0.008</span></label>
+            <input type="range" id="accel-slider" min="0.001" max="0.02" step="0.001" value="0.008">
+        </div>
+
+        <div class="setting-row">
+            <label>BRAKES: <span class="val-display" id="brake-label">0.015</span></label>
+            <input type="range" id="brake-slider" min="0.005" max="0.05" step="0.001" value="0.015">
+        </div>
+
+        <div class="setting-row">
+            <label>DRAG (AERO): <span class="val-display" id="drag-label">0.015</span></label>
+            <input type="range" id="drag-slider" min="0.001" max="0.05" step="0.001" value="0.015">
+        </div>
+
+        <div class="setting-row">
+            <label>HANDLING: <span class="val-display" id="steer-label">0.015</span></label>
+            <input type="range" id="steer-slider" min="0.005" max="0.04" step="0.001" value="0.015">
+        </div>
     </div>
 
     <div id="cockpit-container">
@@ -74,12 +141,37 @@
     <script type="module">
         import * as THREE from 'three';
 
+        // --- Config State (Hooked to Sliders) ---
+        const config = {
+            fov: 90,
+            accel: 0.008,
+            brake: 0.015,
+            drag: 0.015,
+            steeringSensitivity: 0.015
+        };
+
+        const setupSliders = () => {
+            const bind = (id, key, labelId) => {
+                const slider = document.getElementById(id);
+                const label = document.getElementById(labelId);
+                slider.oninput = () => {
+                    config[key] = parseFloat(slider.value);
+                    label.innerText = slider.value;
+                    if (key === 'fov') {
+                        camera.fov = config.fov;
+                        camera.updateProjectionMatrix();
+                    }
+                };
+            };
+            bind('fov-slider', 'fov', 'fov-label');
+            bind('accel-slider', 'accel', 'accel-label');
+            bind('brake-slider', 'brake', 'brake-label');
+            bind('drag-slider', 'drag', 'drag-label');
+            bind('steer-slider', 'steeringSensitivity', 'steer-label');
+        };
+
         const scene = new THREE.Scene();
-        
-        // --- FOV ADJUSTMENT ---
-        // Increased from 75 to 90 for a wider perspective of the track.
-        const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 5000);
-        
+        const camera = new THREE.PerspectiveCamera(config.fov, window.innerWidth / window.innerHeight, 0.1, 5000);
         const renderer = new THREE.WebGLRenderer({ antialias: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -98,24 +190,21 @@
         const bottomSky = new THREE.Mesh(bottomSkyGeo, bottomSkyMat);
         bottomSky.scale.y = -1;
         skyGroup.add(bottomSky);
-
         scene.add(skyGroup);
 
         const trackTex = loader.load('track.jpg');
-        const trackGeo = new THREE.PlaneGeometry(2000, 2000); // Increased size to match wider FOV
+        const trackGeo = new THREE.PlaneGeometry(2000, 2000);
         const trackMat = new THREE.MeshBasicMaterial({ map: trackTex });
         const track = new THREE.Mesh(trackGeo, trackMat);
         track.rotation.x = -Math.PI / 2;
         track.position.y = -2.5; 
         scene.add(track);
 
+        // --- Physics Engine ---
         let velocity = 0;
         let angle = 0;
-        const maxVelocity = 2.5;
-        const acceleration = 0.008; 
-        const dragCoefficient = 0.015;
-        const brakingPower = 0.03;
-
+        let steeringValue = 0; // Smoothed steering value (-1 to 1)
+        
         const keys = {};
         const cockpitImg = document.getElementById('cockpit-img');
         const speedVal = document.getElementById('speed-val');
@@ -130,31 +219,53 @@
         window.addEventListener('keyup', (e) => keys[e.key] = false);
 
         camera.position.set(0, 0, 800);
+        setupSliders();
 
         function animate() {
             requestAnimationFrame(animate);
 
+            // Acceleration & Braking
             if (keys['ArrowUp'] || keys['w']) {
-                velocity += acceleration;
+                velocity += config.accel;
             } else if (keys['ArrowDown'] || keys['s']) {
-                velocity -= brakingPower;
+                velocity -= config.brake; // Now adjustable and default is lower
             }
 
-            velocity -= (velocity * dragCoefficient);
-            velocity = Math.max(0, Math.min(velocity, maxVelocity));
+            // Aero Drag
+            velocity -= (velocity * config.drag);
+            velocity = Math.max(0, velocity);
 
-            let currentSprite = sprites.straight;
+            // Keyboard Smoothing Logic
+            const steeringSpeed = 0.05; // How fast the wheel turns
+            const autoCenterSpeed = 0.08; // How fast it snaps back
+
+            if (keys['ArrowLeft'] || keys['a']) {
+                steeringValue = Math.max(steeringValue - steeringSpeed, -1);
+            } else if (keys['ArrowRight'] || keys['d']) {
+                steeringValue = Math.min(steeringValue + steeringSpeed, 1);
+            } else {
+                // Return to center when no key is pressed
+                if (steeringValue > 0) steeringValue = Math.max(0, steeringValue - autoCenterSpeed);
+                if (steeringValue < 0) steeringValue = Math.min(0, steeringValue + autoCenterSpeed);
+            }
+
+            // Apply steering to angle
             if (velocity > 0.05) {
-                if (keys['ArrowLeft'] || keys['a']) {
-                    angle += 0.025;
-                    currentSprite = sprites.left;
-                } else if (keys['ArrowRight'] || keys['d']) {
-                    angle -= 0.025;
-                    currentSprite = sprites.right;
-                }
+                angle -= steeringValue * config.steeringSensitivity;
             }
 
-            if (cockpitImg.src !== currentSprite) cockpitImg.src = currentSprite;
+            // Sprite Selection based on smoothed steering value
+            let currentSprite = sprites.straight;
+            if (steeringValue < -0.3) currentSprite = sprites.left;
+            if (steeringValue > 0.3) currentSprite = sprites.right;
+
+            if (cockpitImg.src !== currentSprite) {
+                // Check if path exists or logic is right
+                const parts = cockpitImg.src.split('/');
+                const currentName = parts[parts.length - 1];
+                const targetName = currentSprite.split('/').pop();
+                if (currentName !== targetName) cockpitImg.src = currentSprite;
+            }
 
             camera.position.x -= Math.sin(angle) * velocity * 5;
             camera.position.z -= Math.cos(angle) * velocity * 5;
