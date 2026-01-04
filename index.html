@@ -3,40 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Krazy Kitty Kart</title>
+    <title>Krazy Kitty Kart - 3D Navigator</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
         canvas { display: block; }
 
-        /* The 2D Kitty/Car Overlay */
+        /* Centered Cockpit Container */
         #cockpit-container {
             position: absolute;
             bottom: 0;
             left: 50%;
             transform: translateX(-50%);
-            width: 100%;
-            max-width: 1000px;
+            width: 100vw;
+            height: 100vh;
             pointer-events: none;
             z-index: 10;
             display: flex;
             justify-content: center;
             align-items: flex-end;
-            animation: rumble 0.1s infinite alternate;
         }
 
         #cockpit-img {
-            width: 100%;
-            height: auto;
+            /* Height determines how much of the screen the car takes */
+            height: 45vh; 
+            width: auto;
             image-rendering: pixelated;
-            transition: transform 0.1s ease-out;
+            /* Rumble effect moved here to keep it centered */
+            animation: rumble 0.1s infinite alternate;
         }
 
         @keyframes rumble {
             from { transform: translateY(0); }
-            to { transform: translateY(2px); }
+            to { transform: translateY(4px); }
         }
 
-        /* UI */
         #ui {
             position: absolute;
             top: 20px;
@@ -67,86 +67,105 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. Scene Setup ---
+        // --- 1. Scene & Camera Setup ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: false }); // False for retro look
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // --- 2. True 3D Sky (Sphere) ---
+        // --- 2. 3D Skybox ---
         const skyTexture = new THREE.TextureLoader().load('sky.jpg');
-        skyTexture.mapping = THREE.EquirectangularReflectionMapping; // Helps with panoramas
-        const skyGeometry = new THREE.SphereGeometry(500, 60, 40);
+        const skyGeometry = new THREE.SphereGeometry(1000, 32, 32);
         const skyMaterial = new THREE.MeshBasicMaterial({
             map: skyTexture,
-            side: THREE.BackSide // Render on the inside
+            side: THREE.BackSide
         });
         const sky = new THREE.Mesh(skyGeometry, skyMaterial);
         scene.add(sky);
 
-        // --- 3. True 3D Racetrack (Floor) ---
+        // --- 3. Finite Racetrack Plane ---
+        // Loads the image once across a single large 3D plane
         const trackTexture = new THREE.TextureLoader().load('track.jpg');
-        trackTexture.wrapS = THREE.RepeatWrapping;
-        trackTexture.wrapT = THREE.RepeatWrapping;
-        trackTexture.repeat.set(1, 20); // Scale the texture tiles
-
-        const trackGeometry = new THREE.PlaneGeometry(100, 1000);
+        
+        // Adjust these numbers based on the aspect ratio of your 'track.jpg'
+        const trackWidth = 500;
+        const trackHeight = 500;
+        
+        const trackGeometry = new THREE.PlaneGeometry(trackWidth, trackHeight);
         const trackMaterial = new THREE.MeshBasicMaterial({ map: trackTexture });
         const track = new THREE.Mesh(trackGeometry, trackMaterial);
         
-        track.rotation.x = -Math.PI / 2; // Lay it flat
-        track.position.y = -2; // Slightly below camera
+        track.rotation.x = -Math.PI / 2; // Lay flat
+        track.position.y = -2; 
         scene.add(track);
 
-        // --- 4. Controls & Movement ---
+        // --- 4. Driving Logic ---
         let speed = 0;
-        let rotation = 0;
+        let angle = 0; // The direction the car is facing
         const keys = {};
+        
         const cockpitImg = document.getElementById('cockpit-img');
         const speedVal = document.getElementById('speed-val');
+
+        // Sprite Paths
+        const sprites = {
+            left: './cat/cat-left.png',
+            straight: './cat/cat-straight.png',
+            right: './cat/cat-right.png'
+        };
 
         window.addEventListener('keydown', (e) => keys[e.key] = true);
         window.addEventListener('keyup', (e) => keys[e.key] = false);
 
-        // Camera positioning
-        camera.position.set(0, 0, 5);
+        // Initial Camera Position (Starting line)
+        camera.position.set(0, 0, 100);
 
         // --- 5. Animation Loop ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Acceleration Logic
-            if (keys['ArrowUp'] || keys['w']) speed = Math.min(speed + 0.01, 0.8);
-            else speed = Math.max(speed - 0.005, 0);
+            // Acceleration / Friction
+            if (keys['ArrowUp'] || keys['w']) {
+                speed = Math.min(speed + 0.005, 1.2);
+            } else {
+                speed = Math.max(speed - 0.005, 0);
+            }
 
-            // Turning Logic
-            let turnEffect = 0;
+            // Steering & Sprite Swapping
+            let currentSprite = sprites.straight;
+
             if (keys['ArrowLeft'] || keys['a']) {
-                rotation += 0.02;
-                turnEffect = -1;
-            }
-            if (keys['ArrowRight'] || keys['d']) {
-                rotation -= 0.02;
-                turnEffect = 1;
+                angle += 0.03;
+                currentSprite = sprites.left;
+            } else if (keys['ArrowRight'] || keys['d']) {
+                angle -= 0.03;
+                currentSprite = sprites.right;
             }
 
-            // Move the world
-            // We scroll the texture instead of moving the camera to keep it "infinite"
-            trackTexture.offset.y += speed;
-            
-            // Rotate the sky and floor together for the turn
-            track.rotation.z = rotation;
-            sky.rotation.y = rotation;
+            // Update 2D Sprite
+            if (cockpitImg.src !== currentSprite) {
+                cockpitImg.src = currentSprite;
+            }
 
-            // Visual feedback on the 2D kitty
-            cockpitImg.style.transform = `rotate(${turnEffect * 5}deg) translateX(${turnEffect * 10}px)`;
-            speedVal.innerText = Math.floor(speed * 400);
+            // Movement Physics (Trigonometry for 3D navigation)
+            // Camera moves based on the angle it's facing
+            camera.position.x -= Math.sin(angle) * speed;
+            camera.position.z -= Math.cos(angle) * speed;
+
+            // Camera looks where it is going
+            camera.rotation.y = angle;
+
+            // Follow Camera with Skybox (prevents "leaving" the sky)
+            sky.position.copy(camera.position);
+
+            // UI Speed Update
+            speedVal.innerText = Math.floor(speed * 200);
 
             renderer.render(scene, camera);
         }
 
-        // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
