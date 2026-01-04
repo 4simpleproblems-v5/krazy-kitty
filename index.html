@@ -1,1 +1,205 @@
-the crazy cat.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Krazy Kitty</title>
+    <style>
+        /* ========================================
+         CSS STYLES - THE 90s AESTHETIC ENGINE
+         ========================================
+        */
+
+        :root {
+            /* Adjust perspective: Lower number = more extreme, close-up angle. Higher = flatter angle. */
+            --perspective-depth: 600px; 
+            /* Where the horizon line sits on the screen (percentage from top) */
+            --horizon-level: 50%;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+        }
+
+        /* The main game screen container */
+        #game-screen {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            /* This is crucial for the 3D effect */
+            perspective: var(--perspective-depth);
+            perspective-origin: 50% var(--horizon-level);
+        }
+
+        /* --- THE WORLD (SKY & TRACK) ---
+        */
+
+        /* The static background sky */
+        .sky {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: var(--horizon-level);
+            /* REPLACE WITH YOUR SKY IMAGE */
+            background-image: url('sky_bg.jpg'); 
+            background-size: cover;
+            background-position: center bottom;
+            z-index: 1;
+        }
+
+        /* The container holding the 3D tilted plane */
+        .track-container {
+            position: absolute;
+            top: var(--horizon-level);
+            left: 0;
+            width: 100%;
+            height: calc(100% - var(--horizon-level));
+            transform-style: preserve-3d;
+            z-index: 2;
+             /* A slight fade at the horizon line */
+            mask-image: linear-gradient(to bottom, transparent 0%, black 20%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%);
+        }
+
+        /* The actual flat plane that gets tilted */
+        .track-plane {
+            /* We make it wider than the screen so edges don't show when tilted */
+            position: absolute;
+            width: 300%; 
+            left: -100%; 
+            /* It needs to be very tall to draw into the distance */
+            height: 8000px; 
+            
+            /* THE MAGIC ROTATION */
+            transform-origin: 50% 0%; /* Pivot from the horizon line */
+            transform: rotateX(80deg); /* Tilt it back */
+            
+            /* REPLACE WITH YOUR SEAMLESS TRACK TEXTURE PHOTO */
+            background-image: url('track_texture.jpg');
+            /* Important: repeat-y is what makes it infinite */
+            background-repeat: repeat;
+            /* Adjust size to scale your road texture */
+            background-size: 50% auto; 
+            background-position: center 0px;
+        }
+
+
+        /* --- THE COCKPIT OVERLAY ---
+        */
+
+        .cockpit-layer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Let clicks pass through */
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+             /* A little 90s engine rumble animation */
+            animation: rumble 0.15s infinite linear alternate;
+        }
+
+        .cockpit-image {
+            /* Adjust width/max-width to fit your specific cat image nicely */
+            width: 100%;
+            max-width: 900px; 
+            display: block;
+        }
+
+        @keyframes rumble {
+            0% { transform: translateY(0px) rotate(0deg); }
+            100% { transform: translateY(3px) rotate(0.3deg); }
+        }
+
+        /* Optional: Simple UI overlay */
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: yellow;
+            font-size: 24px;
+            z-index: 20;
+            text-shadow: 2px 2px 0 #000;
+            font-family: 'Courier New', Courier, monospace; /* Retro font */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-screen">
+        <div class="sky"></div>
+
+        <div class="track-container">
+            <div class="track-plane" id="trackPlane"></div>
+        </div>
+
+        <div class="cockpit-layer">
+            <img src="https://i.imgur.com/0L0PZq4.jpeg" alt="Cat Cockpit" class="cockpit-image">
+        </div>
+
+        <div class="ui-overlay">
+            SPEED: <span id="speed-meter">MAX</span><br>
+            LAP: 1 / 3
+        </div>
+    </div>
+
+
+    <script>
+        /* ========================================
+         JAVASCRIPT - THE SCROLL ENGINE
+         ========================================
+        */
+
+        const trackPlane = document.getElementById('trackPlane');
+        
+        // Game state variables
+        let speed = 15; // How fast the texture scrolls per frame
+        let positionY = 0; // Vertical scroll position
+        let positionX = 50; // Horizontal position (for turning illusion)
+
+        // Basic Controls (Left/Right arrows adjust horizontal texture position)
+        let turning = 0;
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowLeft') turning = -0.5;
+            if(e.key === 'ArrowRight') turning = 0.5;
+        });
+        document.addEventListener('keyup', (e) => {
+            if(e.key === 'ArrowLeft' || e.key === 'ArrowRight') turning = 0;
+        });
+
+
+        // The Game Loop - runs every animation frame
+        function gameLoop() {
+            // 1. Update vertical position (Forward motion)
+            positionY += speed;
+
+            // 2. Update horizontal position (Turning illusion)
+            // We add speed to the turning calculation so you turn faster when moving faster
+            positionX += turning * (speed / 5);
+
+            // 3. Apply the new positions to the background texture
+            // Note: positionY changes the second value, making the road "move towards" us.
+            // positionX changes the center percentage, making the road shift left/right.
+            trackPlane.style.backgroundPosition = `${positionX}% ${positionY}px`;
+
+            // Keep the loop running
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the engine
+        gameLoop();
+
+    </script>
+</body>
+</html>
